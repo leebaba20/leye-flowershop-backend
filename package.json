@@ -6,16 +6,23 @@
     "start": "node server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": ["flower", "shop", "payment", "backend", "express"],
+  "keywords": [
+    "flower",
+    "shop",
+    "payment",
+    "backend",
+    "express"
+  ],
   "author": "ADELEYE",
   "license": "ISC",
   "dependencies": {
     "axios": "^1.9.0",
+    "body-parser": "^1.19.0",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
-    "paystack-node": "^2.0.1",
-    "body-parser": "^1.19.0"
+    "paystack-api": "^2.0.6",
+    "paystack-node": "^0.3.0"
   },
   "engines": {
     "node": "18.x"
