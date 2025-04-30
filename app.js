@@ -13,6 +13,11 @@ app.use(bodyParser.json());
 
 const paystackInstance = new paystack(process.env.PAYSTACK_SECRET_KEY);
 
+// Root Route
+app.get('/', (req, res) => {
+  res.send('Welcome to the Leye FlowerShop Backend!');
+});
+
 // Payment Initialization Route
 app.post('/api/initialize-payment', async (req, res) => {
   const { email, amount } = req.body;
