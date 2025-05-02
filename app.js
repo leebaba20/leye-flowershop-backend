@@ -8,7 +8,7 @@ dotenv.config();
 
 const app = express();
 
-// Enable CORS for your frontend (Updated with new frontend URL)
+// ✅ Enable CORS for your frontend (adjust if deploying from another domain)
 app.use(cors({ origin: 'https://gregarious-maamoul-62e3c3.netlify.app' }));
 app.use(bodyParser.json());
 
@@ -20,50 +20,41 @@ if (!PAYSTACK_SECRET_KEY) {
   process.exit(1);
 }
 
-if (!PAYSTACK_CALLBACK_URL) {
-  console.error('❌ PAYSTACK_CALLBACK_URL is missing. Using fallback URL.');
-}
+console.log('✅ Callback URL in use:', PAYSTACK_CALLBACK_URL);
 
-console.log('Callback URL:', PAYSTACK_CALLBACK_URL); // Log the callback URL for debugging
-
+// ✅ Home route
 app.get('/', (req, res) => {
   res.send('🌸 Welcome to the Leye FlowerShop Backend!');
 });
 
-// Payment Initialization
+// ✅ Initialize Payment Route
 app.post('/api/initialize-payment', async (req, res) => {
   const { email, amount, shippingDetails } = req.body;
 
-  // Ensure that email and amount are provided
   if (!email || !amount) {
     return res.status(400).json({ message: 'Email and amount are required' });
   }
 
   try {
-    const amountInNaira = amount; // The frontend already sends this in Naira (₦)
+    const amountInKobo = Math.round(amount * 100);
 
-    // Ensure amount doesn't exceed the Paystack limit (500,000 NGN)
-    if (amountInNaira > 500000) {
+    if (amount > 500000) {
       return res.status(400).json({
         message: 'Amount exceeds allowed limit. Reduce the total purchase amount.',
       });
     }
 
-    // Convert amount to Kobo (Paystack uses Kobo, where 1 Naira = 100 Kobo)
-    const amountInKobo = Math.round(amountInNaira * 100);
-
     const paymentData = {
       email,
-      amount: amountInKobo,  // Amount is now in Kobo
-      currency: 'NGN',       // Currency is Naira (NGN)
+      amount: amountInKobo,
+      currency: 'NGN',
       callback_url: PAYSTACK_CALLBACK_URL,
       metadata: {
         shipping_details: shippingDetails,
-        user_email: email,  // Use the email from frontend for better tracking
+        user_email: email,
       },
     };
 
-    // Make request to Paystack to initialize the payment
     const response = await axios.post(
       'https://api.paystack.co/transaction/initialize',
       paymentData,
@@ -74,7 +65,6 @@ app.post('/api/initialize-payment', async (req, res) => {
       }
     );
 
-    // Extract authorization URL from Paystack's response and send it back to the frontend
     const { authorization_url } = response.data.data;
     res.json({ authorization_url });
   } catch (error) {
@@ -83,17 +73,15 @@ app.post('/api/initialize-payment', async (req, res) => {
   }
 });
 
-// Payment Verification
+// ✅ Verify Payment Route
 app.post('/api/verify-payment', async (req, res) => {
   const { reference } = req.body;
 
-  // Ensure that reference is provided
   if (!reference) {
     return res.status(400).json({ message: 'Payment reference is required' });
   }
 
   try {
-    // Verify the payment using the reference from Paystack
     const response = await axios.get(
       `https://api.paystack.co/transaction/verify/${reference}`,
       {
@@ -103,10 +91,8 @@ app.post('/api/verify-payment', async (req, res) => {
       }
     );
 
-    // Get transaction data from Paystack's response
     const transactionData = response.data.data;
 
-    // Check if the payment was successful
     if (transactionData.status === 'success') {
       res.status(200).json({ message: 'Payment successful', data: transactionData });
     } else {
