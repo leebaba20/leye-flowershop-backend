@@ -7,7 +7,9 @@ const axios = require('axios');
 dotenv.config();
 
 const app = express();
-app.use(cors());
+
+// Enable CORS for Netlify frontend
+app.use(cors({ origin: 'https://gregarious-maamoul-62e3c3.netlify.app' }));
 app.use(bodyParser.json());
 
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
@@ -57,7 +59,7 @@ app.post('/api/initialize-payment', async (req, res) => {
       email,
       amount: amountInKobo,
       currency: 'NGN',
-      callback_url: process.env.PAYSTACK_CALLBACK_URL || 'http://localhost:3000/payment-success',
+      callback_url: process.env.PAYSTACK_CALLBACK_URL || 'https://gregarious-maamoul-62e3c3.netlify.app/payment-success',
       metadata: { shipping_details: shippingDetails },
     };
 
