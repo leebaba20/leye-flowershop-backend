@@ -22,38 +22,24 @@ app.get('/', (req, res) => {
   res.send('🌸 Welcome to the Leye FlowerShop Backend!');
 });
 
-// Helper to convert USD to NGN
-const convertUSDToNGN = (usdAmount) => {
-  const USD_TO_NGN_RATE = 100; // You can adjust this or fetch dynamically
-  return usdAmount * USD_TO_NGN_RATE;
-};
-
 // Payment Initialization
 app.post('/api/initialize-payment', async (req, res) => {
-  const { email, amount, currency = 'USD', shippingDetails } = req.body;
+  const { email, amount, shippingDetails } = req.body;
 
   if (!email || !amount) {
     return res.status(400).json({ message: 'Email and amount are required' });
   }
 
   try {
-    let amountInNaira;
+    // In NGN, no conversion needed
+    const amountInKobo = Math.round(amount * 100);
 
-    if (currency === 'USD') {
-      amountInNaira = convertUSDToNGN(amount);
-    } else if (currency === 'NGN') {
-      amountInNaira = amount;
-    } else {
-      return res.status(400).json({ message: 'Unsupported currency' });
-    }
-
-    if (amountInNaira > 2000000) {
+    // Check if amount exceeds the limit (500000 NGN)
+    if (amountInKobo > 50000000) { // 500000 NGN in kobo
       return res.status(400).json({
         message: 'Amount exceeds allowed limit. Reduce the total purchase amount.',
       });
     }
-
-    const amountInKobo = Math.round(amountInNaira * 100);
 
     const paymentData = {
       email,
