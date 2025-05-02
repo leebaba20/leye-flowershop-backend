@@ -31,22 +31,25 @@ app.post('/api/initialize-payment', async (req, res) => {
   }
 
   try {
-    // In NGN, no conversion needed
-    const amountInKobo = Math.round(amount * 100);
+    const amountInNaira = amount; // Directly use amount in NGN
 
-    // Check if amount exceeds the limit (500000 NGN)
-    if (amountInKobo > 50000000) { // 500000 NGN in kobo
+    if (amountInNaira > 500000) {
       return res.status(400).json({
         message: 'Amount exceeds allowed limit. Reduce the total purchase amount.',
       });
     }
 
+    const amountInKobo = Math.round(amountInNaira * 100);
+
     const paymentData = {
-      email,
+      email, 
       amount: amountInKobo,
-      currency: 'NGN',
+      currency: 'NGN', // Use NGN for Naira
       callback_url: process.env.PAYSTACK_CALLBACK_URL || 'https://gregarious-maamoul-62e3c3.netlify.app/payment-success',
-      metadata: { shipping_details: shippingDetails },
+      metadata: {
+        shipping_details: shippingDetails,
+        user_email: 'princeleeoye@gmail.com',
+      },
     };
 
     const response = await axios.post(
