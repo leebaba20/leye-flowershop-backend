@@ -13,10 +13,18 @@ app.use(cors({ origin: 'https://gregarious-maamoul-62e3c3.netlify.app' }));
 app.use(bodyParser.json());
 
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
+const PAYSTACK_CALLBACK_URL = process.env.PAYSTACK_CALLBACK_URL || 'https://gregarious-maamoul-62e3c3.netlify.app/payment-success';
+
 if (!PAYSTACK_SECRET_KEY) {
   console.error('❌ Paystack Secret Key is missing.');
   process.exit(1);
 }
+
+if (!PAYSTACK_CALLBACK_URL) {
+  console.error('❌ PAYSTACK_CALLBACK_URL is missing. Using fallback URL.');
+}
+
+console.log('Callback URL:', PAYSTACK_CALLBACK_URL); // Log the callback URL for debugging
 
 app.get('/', (req, res) => {
   res.send('🌸 Welcome to the Leye FlowerShop Backend!');
@@ -48,7 +56,7 @@ app.post('/api/initialize-payment', async (req, res) => {
       email,
       amount: amountInKobo,  // Amount is now in Kobo
       currency: 'NGN',       // Currency is Naira (NGN)
-      callback_url: process.env.PAYSTACK_CALLBACK_URL || 'https://gregarious-maamoul-62e3c3.netlify.app/payment-success',
+      callback_url: PAYSTACK_CALLBACK_URL,
       metadata: {
         shipping_details: shippingDetails,
         user_email: email,  // Use the email from frontend for better tracking
