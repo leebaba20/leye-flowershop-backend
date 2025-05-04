@@ -8,7 +8,7 @@ dotenv.config();
 
 const app = express();
 
-// ✅ Enable CORS for your frontend (adjust if deploying from another domain)
+// ✅ Enable CORS for your frontend
 app.use(cors({ origin: 'https://gregarious-maamoul-62e3c3.netlify.app' }));
 app.use(bodyParser.json());
 
@@ -26,57 +26,49 @@ console.log('✅ Callback URL in use:', PAYSTACK_CALLBACK_URL);
 app.get('/', (req, res) => {
   res.send('🌸 Welcome to the Leye FlowerShop Backend!');
 });
-// Payment Initialization
-app.post('/api/initialize-payment', async (req, res) => {
-  const { email, amount, shippingDetails } = req.body;
 
-  // Ensure that email and amount are provided
+// ✅ Initialize Payment Route
+app.post('/api/initialize-payment', async (req, res) => {
+  const { email, amount, shippingDetails, cartItems } = req.body;
+
   if (!email || !amount) {
     return res.status(400).json({ message: 'Email and amount are required' });
   }
 
   try {
-    const amountInNaira = amount; // Assuming amount is in NGN (₦)
-
-    // Ensure amount doesn't exceed Paystack's limit (500,000 NGN)
-    if (amountInNaira > 500000) {
+    if (amount > 500000) {
       return res.status(400).json({
         message: 'Amount exceeds allowed limit. Reduce the total purchase amount.',
       });
     }
 
-    // Convert amount to Kobo (Paystack uses Kobo, where 1 Naira = 100 Kobo)
-    const amountInKobo = Math.round(amountInNaira * 100);
+    const amountInKobo = Math.round(amount * 100);
 
     const paymentData = {
       email,
-      amount: amountInKobo,  // Amount is in Kobo (1 Naira = 100 Kobo)
-      currency: 'NGN',       // Currency is Naira (NGN)
-      callback_url: PAYSTACK_CALLBACK_URL, // Define a callback URL
+      amount: amountInKobo,
+      currency: 'NGN',
+      callback_url: PAYSTACK_CALLBACK_URL,
       metadata: {
         shipping_details: shippingDetails,
-        user_email: email,  // For better tracking
+        cartItems: cartItems || [],
+        user_email: email,
       },
     };
 
-    // Make request to Paystack to initialize the payment
     const response = await axios.post(
       'https://api.paystack.co/transaction/initialize',
       paymentData,
       {
         headers: {
-          Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,  // Paystack Secret Key
+          Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
         },
       }
     );
 
-    console.log('Paystack API Response:', response.data); // Log full response from Paystack
-
-    // Check if the authorization_url exists and send it back
     const { authorization_url } = response.data.data;
     if (authorization_url) {
-      console.log('Authorization URL:', authorization_url);  // Log the authorization URL for debugging
-      res.json({ authorization_url });  // Send the authorization URL back to the frontend
+      res.json({ authorization_url });
     } else {
       res.status(500).json({ message: 'Failed to retrieve authorization URL from Paystack' });
     }
@@ -86,5 +78,42 @@ app.post('/api/initialize-payment', async (req, res) => {
   }
 });
 
+// ✅ Verify Payment Route
+app.post('/api/verify-payment', async (req, res) => {
+  const { reference } = req.body;
+
+  if (!reference) {
+    return res.status(400).json({ message: 'Reference is required for verification' });
+  }
+
+  try {
+    const response = await axios.get(
+      `https://api.paystack.co/transaction/verify/${reference}`,
+      {
+        headers: {
+          Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+        },
+      }
+    );
+
+    const data = response.data;
+
+    if (data.status && data.data.status === 'success') {
+      const order = {
+        Shipping: data.data.metadata?.shipping_details || {},
+        cartItems: data.data.metadata?.cartItems || [],
+        email: data.data.customer?.email || '',
+        reference: data.data.reference,
+      };
+
+      return res.status(200).json({ message: 'Payment successful', data: order });
+    } else {
+      return res.status(400).json({ message: 'Payment not successful' });
+    }
+  } catch (error) {
+    console.error('❌ Error verifying payment:', error.response?.data || error.message);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
 
 module.exports = app;
