@@ -172,12 +172,7 @@ class NewsletterSubscriptionSerializer(serializers.ModelSerializer):
         model = NewsletterSubscription
         fields = ['email']
 
-    def validate_email(self, value):
-        if NewsletterSubscription.objects.filter(email__iexact=value).exists():
-            raise serializers.ValidationError("This email is already subscribed.")
-        return value
-
-
+   
 # === CONTACT MESSAGE SERIALIZER ===
 class ContactMessageSerializer(serializers.ModelSerializer):
     class Meta:
