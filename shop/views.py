@@ -155,7 +155,7 @@ class CreatePaymentView(APIView):
 
         data = {
             "email": email,
-            "amount": int(amount) * 100  # Paystack expects amount in kobo
+            "amount": int(amount)# Paystack expects amount in kobo
         }
 
         response = requests.post("https://api.paystack.co/transaction/initialize", json=data, headers=headers)
