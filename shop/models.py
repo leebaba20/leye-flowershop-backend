@@ -43,11 +43,12 @@ class Order(models.Model):
 
 
 class NewsletterSubscription(models.Model):
-    email = models.EmailField(unique=True)
+    email = models.EmailField()
     subscribed_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return self.email
+
 
 class ContactMessage(models.Model):
     name = models.CharField(max_length=100, blank=True)

@@ -251,6 +251,12 @@ class OrderView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status, permissions
+from django.core.mail import send_mail
+from .serializers import NewsletterSubscriptionSerializer
+
 class NewsletterView(APIView):
     permission_classes = [permissions.AllowAny]
 
@@ -260,19 +266,19 @@ class NewsletterView(APIView):
             subscription = serializer.save()
             email = subscription.email
 
-            if NewsletterSubscription.objects.filter(email=email).count() == 1:
-                send_mail(
-                    subject="New Newsletter Subscription",
-                    message=f"A new user has subscribed: {email}",
-                    from_email="no-reply@example.com",
-                    recipient_list=["princeleeoye@gmail.com"],
-                    fail_silently=False,
-                )
+            # Always send notification for each subscription (even if it's a duplicate)
+            send_mail(
+                subject="New Newsletter Subscription",
+                message=f"A new user has subscribed: {email}",
+                from_email="no-reply@example.com",
+                recipient_list=["princeleeoye@gmail.com"],
+                fail_silently=False,
+            )
 
             return Response({"message": "Subscribed successfully"}, status=status.HTTP_201_CREATED)
 
-        logger.warning("❌ Newsletter Subscription Errors:", extra={'errors': serializer.errors})
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 @method_decorator(csrf_exempt, name='dispatch')
 class ContactView(APIView):
