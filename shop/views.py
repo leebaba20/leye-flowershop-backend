@@ -144,6 +144,7 @@ class CreatePaymentView(APIView):
     def post(self, request):
         email = request.data.get('email')
         amount = request.data.get('amount')
+        metadata = request.data.get('metadata', {})
 
         if not email or not amount:
             return Response({'error': 'Email and amount are required'}, status=status.HTTP_400_BAD_REQUEST)
@@ -155,7 +156,8 @@ class CreatePaymentView(APIView):
 
         data = {
             "email": email,
-            "amount": int(amount)# Paystack expects amount in kobo
+            "amount": int(amount * 100),  # Convert Naira to Kobo
+            "metadata": metadata
         }
 
         response = requests.post("https://api.paystack.co/transaction/initialize", json=data, headers=headers)
