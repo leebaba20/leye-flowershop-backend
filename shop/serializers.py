@@ -7,6 +7,7 @@ from .models import ShippingInfo, NewsletterSubscription, ContactMessage, Order
 
 User = get_user_model()
 
+
 # === USER SERIALIZER ===
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -22,12 +23,13 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         username = attrs.get('username')
         password = attrs.get('password')
 
-        if username and password:
-            user = authenticate(request=self.context.get('request'), username=username, password=password)
-            if not user:
-                raise serializers.ValidationError(_("Invalid username or password."))
-        else:
+        if not username or not password:
             raise serializers.ValidationError(_("Must include both username and password."))
+
+        user = authenticate(request=self.context.get('request'), username=username, password=password)
+
+        if not user:
+            raise serializers.ValidationError(_("Invalid username or password."))
 
         refresh = self.get_token(user)
 
@@ -172,7 +174,12 @@ class NewsletterSubscriptionSerializer(serializers.ModelSerializer):
         model = NewsletterSubscription
         fields = ['email']
 
-   
+    def validate_email(self, value):
+        if NewsletterSubscription.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError("You are already subscribed with this email.")
+        return value
+
+
 # === CONTACT MESSAGE SERIALIZER ===
 class ContactMessageSerializer(serializers.ModelSerializer):
     class Meta:

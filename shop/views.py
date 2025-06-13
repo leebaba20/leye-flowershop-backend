@@ -1,6 +1,7 @@
 import os
 import logging
 import requests
+
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
@@ -35,9 +36,8 @@ from .models import ShippingInfo, Order, NewsletterSubscription, ContactMessage
 logger = logging.getLogger(__name__)
 User = get_user_model()
 
-
 class SignupView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [permissions.AllowAny]
 
     def post(self, request):
         serializer = SignupSerializer(data=request.data)
@@ -55,10 +55,8 @@ class SignupView(APIView):
         logger.warning("Signup failed", extra={'errors': serializer.errors})
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
-
 
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
@@ -72,10 +70,9 @@ class LogoutView(APIView):
             token.blacklist()
             logger.info(f"User {request.user.email} logged out")
             return Response({"message": "Logged out successfully"}, status=status.HTTP_205_RESET_CONTENT)
-        except TokenError:
+        except TokenError as e:
             logger.warning("Logout failed: invalid token", exc_info=True)
             return Response({"error": "Invalid or expired token"}, status=status.HTTP_400_BAD_REQUEST)
-
 
 class CurrentUserView(APIView):
     permission_classes = [IsAuthenticated]
@@ -84,15 +81,13 @@ class CurrentUserView(APIView):
         serializer = UserSerializer(request.user)
         return Response(serializer.data)
 
-
 @ensure_csrf_cookie
 def get_csrf_token(request):
     return JsonResponse({'detail': 'CSRF cookie set'})
 
-
 @method_decorator(csrf_exempt, name='dispatch')
 class PasswordResetRequestView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [permissions.AllowAny]
 
     def post(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
@@ -118,10 +113,9 @@ class PasswordResetRequestView(APIView):
             logger.warning(f"Password reset requested for non-existent email: {email}")
             return Response({"error": "User with this email does not exist."}, status=status.HTTP_404_NOT_FOUND)
 
-
 @method_decorator(csrf_exempt, name='dispatch')
 class PasswordResetConfirmView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [permissions.AllowAny]
 
     def post(self, request):
         serializer = PasswordResetConfirmSerializer(data=request.data)
@@ -147,12 +141,10 @@ class PasswordResetConfirmView(APIView):
             logger.error("Password reset failed", exc_info=True)
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-
 class CreatePaymentView(APIView):
     def post(self, request):
         email = request.data.get('email')
         amount = request.data.get('amount')
-        metadata = request.data.get('metadata', {})
 
         if not email or not amount:
             return Response({'error': 'Email and amount are required'}, status=status.HTTP_400_BAD_REQUEST)
@@ -164,8 +156,7 @@ class CreatePaymentView(APIView):
 
         data = {
             "email": email,
-            "amount": int(amount * 100),  # Convert Naira to Kobo
-            "metadata": metadata
+            "amount": int(amount)# Paystack expects amount in kobo
         }
 
         response = requests.post("https://api.paystack.co/transaction/initialize", json=data, headers=headers)
@@ -179,19 +170,10 @@ class CreatePaymentView(APIView):
 
 @method_decorator(csrf_exempt, name='dispatch')
 class VerifyPaymentView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [permissions.AllowAny]
 
     def post(self, request):
         serializer = VerifyPaymentSerializer(data=request.data)
-        order_data = request.data.get('order', {})
-
-        if order_data:
-            order_serializer = OrderSerializer(data=order_data)
-            if not order_serializer.is_valid():
-                return Response(order_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        else:
-            order_serializer = None
-
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -202,27 +184,52 @@ class VerifyPaymentView(APIView):
         try:
             response = requests.get(url, headers=headers)
             res_data = response.json()
+
             if response.status_code == 200 and res_data.get("status"):
-                logger.info(f"Payment verified: {reference}")
+                logger.info(f"✅ Payment verified: {reference}")
+                metadata = res_data["data"].get("metadata", {})
+                shipping = metadata.get("shipping")
+                cart = metadata.get("cart")
+                amount = res_data["data"].get("amount", 0) / 100  # convert back to Naira
 
                 user = request.user if request.user.is_authenticated else None
-                if user and order_serializer:
+
+                # Save shipping info
+                if user and shipping:
+                    shipping_instance, _ = ShippingInfo.objects.update_or_create(
+                        user=user,
+                        defaults={
+                            "full_name": shipping.get("full_name", ""),
+                            "address": shipping.get("address", ""),
+                            "city": shipping.get("city", ""),
+                            "state": shipping.get("state", ""),
+                            "postal_code": shipping.get("postal_code", ""),
+                            "country": shipping.get("country", ""),
+                            "phone_number": shipping.get("phone_number", ""),
+                        }
+                    )
+                    logger.info(f"Shipping info saved for user {user.email}")
+
+                # Save order
+                if user and cart:
                     Order.objects.update_or_create(
                         reference=reference,
                         defaults={
-                            'user': user,
-                            'items': order_serializer.validated_data['items'],
-                            'total_amount': order_serializer.validated_data['total_amount'],
+                            "user": user,
+                            "items": cart,
+                            "total_amount": amount,
                         }
                     )
                     logger.info(f"Order saved for user {user.email}, ref: {reference}")
                 else:
-                    logger.warning("Payment verified but user not authenticated or order data missing.")
+                    logger.warning("User not authenticated or cart empty — order not saved.")
 
                 return Response(res_data["data"], status=status.HTTP_200_OK)
+
             return Response({'error': res_data.get("message", "Payment verification failed")}, status=status.HTTP_400_BAD_REQUEST)
+
         except Exception as e:
-            logger.error("Payment verification failed", exc_info=True)
+            logger.error("❌ Payment verification failed", exc_info=True)
             return Response({'error': f'Invalid request: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -232,7 +239,8 @@ class ShippingView(APIView):
     def post(self, request):
         try:
             shipping = ShippingInfo.objects.filter(user=request.user).first()
-            serializer = ShippingSerializer(instance=shipping, data=request.data, context={'user': request.user})
+            context = {'user': request.user}
+            serializer = ShippingSerializer(instance=shipping, data=request.data, context=context)
 
             if serializer.is_valid():
                 serializer.save()
@@ -249,7 +257,6 @@ class ShippingView(APIView):
     def put(self, request):
         return self.post(request)
 
-
 class OrderView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = OrderSerializer
@@ -260,31 +267,28 @@ class OrderView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
-
 class NewsletterView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        email = request.data.get('email')
-        if not email:
-            return Response({"email": ["This field is required."]}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = NewsletterSubscriptionSerializer(data=request.data)
+        if serializer.is_valid():
+            subscription = serializer.save()
+            email = subscription.email
 
-        subscription, created = NewsletterSubscription.objects.get_or_create(email=email)
+            # Optional: Send admin notification
+            send_mail(
+                subject="New Newsletter Subscription",
+                message=f"A new user has subscribed: {email}",
+                from_email="no-reply@example.com",
+                recipient_list=["princeleeoye@gmail.com"],
+                fail_silently=False,
+            )
 
-        send_mail(
-            subject="New Newsletter Subscription",
-            message=f"A user subscribed to the newsletter: {email}",
-            from_email="no-reply@example.com",
-            recipient_list=["princeleeoye@gmail.com"],
-            fail_silently=False,
-        )
+            return Response({"message": "Subscribed successfully"}, status=status.HTTP_201_CREATED)
 
-        return Response(
-            {"message": "Subscribed successfully"},
-            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK
-        )
-
-
+        # Automatically handles duplicate email errors and returns 400
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 @method_decorator(csrf_exempt, name='dispatch')
 class ContactView(APIView):
     permission_classes = [AllowAny]
@@ -304,7 +308,7 @@ class ContactView(APIView):
                     fail_silently=False,
                 )
                 logger.info(f"Notification email sent for contact message from {contact.email}")
-            except Exception:
+            except Exception as e:
                 logger.error("Failed to send contact notification email", exc_info=True)
 
             return Response({"detail": "Message received successfully."}, status=status.HTTP_200_OK)

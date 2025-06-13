@@ -2,7 +2,8 @@ import logging
 import os
 from pathlib import Path
 from datetime import timedelta
-from decouple import Config, RepositoryEnv  # Import these for env switching
+from decouple import Config, RepositoryEnv, Csv
+
 
 # Switch between .env and .env.production based on DJANGO_ENV
 env_file = '.env.production' if os.getenv('DJANGO_ENV') == 'production' else '.env'
@@ -14,7 +15,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Security
 SECRET_KEY = config('DJANGO_SECRET_KEY', default='fallback-secret-key')
 DEBUG = config('DEBUG', default=True, cast=bool)
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1').split(',')
+
+#Csv
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
+
 
 # Installed apps
 INSTALLED_APPS = [
@@ -117,6 +121,8 @@ CSRF_TRUSTED_ORIGINS = [
     "https://leyeflowershop.netlify.app",
     "https://leye-flowershop-backend.onrender.com",
 ]
+
+
 
 # Secure cookie settings for HTTPS
 SECURE_SSL_REDIRECT = True
