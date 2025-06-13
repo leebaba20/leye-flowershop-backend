@@ -267,28 +267,34 @@ class OrderView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
-class NewsletterView(APIView):
-    permission_classes = [permissions.AllowAny]
+class NewsletterView(generics.CreateAPIView):
+    queryset = NewsletterSubscription.objects.all()
+    serializer_class = NewsletterSubscriptionSerializer
 
-    def post(self, request):
-        serializer = NewsletterSubscriptionSerializer(data=request.data)
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+
         if serializer.is_valid():
             subscription = serializer.save()
-            email = subscription.email
 
-            # Optional: Send admin notification
-            send_mail(
-                subject="New Newsletter Subscription",
-                message=f"A new user has subscribed: {email}",
-                from_email="no-reply@example.com",
-                recipient_list=["princeleeoye@gmail.com"],
-                fail_silently=False,
-            )
+            # Send a confirmation email
+            try:
+                send_mail(
+                    subject="Thanks for Subscribing to Leye Flower Shop 🌸",
+                    message="Hello!\n\nYou’ve successfully subscribed to our newsletter. We’ll keep you updated with our latest flowers, promos, and updates!\n\n- Leye Flower Shop 🌷",
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[subscription.email],
+                    fail_silently=True,  # Optional: change to False to raise errors
+                )
+            except Exception as e:
+                # Optional: log this if needed
+                print("Email error:", e)
 
-            return Response({"message": "Subscribed successfully"}, status=status.HTTP_201_CREATED)
-
-        # Automatically handles duplicate email errors and returns 400
+            return Response({'message': 'Subscribed successfully.'}, status=status.HTTP_201_CREATED)
+        
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+      
 @method_decorator(csrf_exempt, name='dispatch')
 class ContactView(APIView):
     permission_classes = [AllowAny]

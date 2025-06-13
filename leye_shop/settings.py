@@ -4,8 +4,7 @@ from pathlib import Path
 from datetime import timedelta
 from decouple import Config, RepositoryEnv, Csv
 
-
-# Switch between .env and .env.production based on DJANGO_ENV
+# Select environment
 env_file = '.env.production' if os.getenv('DJANGO_ENV') == 'production' else '.env'
 config = Config(RepositoryEnv(env_file))
 
@@ -16,11 +15,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config('DJANGO_SECRET_KEY', default='fallback-secret-key')
 DEBUG = config('DEBUG', default=True, cast=bool)
 
-#Csv
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
 
-
-# Installed apps
+# Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -36,22 +33,19 @@ INSTALLED_APPS = [
     'shop',
 ]
 
-# Middleware
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    # 'django.middleware.csrf.CsrfViewMiddleware',  # Optional if JWT only
+    # 'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-# URLs
 ROOT_URLCONF = 'leye_shop.urls'
 
-# Templates
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
@@ -68,10 +62,9 @@ TEMPLATES = [
     },
 ]
 
-# WSGI application
 WSGI_APPLICATION = 'leye_shop.wsgi.application'
 
-# Database (SQLite for now)
+# Database
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -109,28 +102,19 @@ CORS_ALLOWED_ORIGINS = [
     "https://leyeflowershop.netlify.app",
 ]
 
-# Allowed hosts and CSRF settings for production
-ALLOWED_HOSTS = [
-    "localhost",
-    "127.0.0.1",
-    "leye-flowershop-backend.onrender.com",
-]
-
+# CSRF trusted origins
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
     "https://leyeflowershop.netlify.app",
     "https://leye-flowershop-backend.onrender.com",
 ]
 
-
-
-# Secure cookie settings for HTTPS
+# HTTPS security
 SECURE_SSL_REDIRECT = True
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 
-
-# DRF & JWT Authentication
+# DRF & JWT
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -151,9 +135,8 @@ SIMPLE_JWT = {
 
 # Paystack key
 PAYSTACK_SECRET_KEY = config('PAYSTACK_SECRET_KEY')
-# print("PAYSTACK_SECRET_KEY loaded:", PAYSTACK_SECRET_KEY)  # Remove in production
 
-# Email configuration
+# ✅ Email configuration (via Gmail SMTP)
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = config("EMAIL_HOST")
 EMAIL_PORT = config("EMAIL_PORT", cast=int)
@@ -161,12 +144,11 @@ EMAIL_USE_TLS = config("EMAIL_USE_TLS", cast=bool)
 EMAIL_HOST_USER = config("EMAIL_HOST_USER")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD")
 DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL")
-# print("EMAIL_HOST_PASSWORD loaded:", EMAIL_HOST_PASSWORD)  # Remove in production
 
 # Frontend base URL
 FRONTEND_BASE_URL = config('FRONTEND_BASE_URL', default='http://localhost:3000')
 
-# Logging setup
+# Logging
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
