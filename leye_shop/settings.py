@@ -105,11 +105,24 @@ CORS_ALLOWED_ORIGINS = [
     "https://leyeflowershop.netlify.app",
 ]
 
-# CSRF trusted origins
+# Allowed hosts and CSRF settings for production
+ALLOWED_HOSTS = [
+    "localhost",
+    "127.0.0.1",
+    "leye-flowershop-backend.onrender.com",
+]
+
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
     "https://leyeflowershop.netlify.app",
+    "https://leye-flowershop-backend.onrender.com",
 ]
+
+# Secure cookie settings for HTTPS
+SECURE_SSL_REDIRECT = True
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+
 
 # DRF & JWT Authentication
 REST_FRAMEWORK = {
