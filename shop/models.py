@@ -34,7 +34,7 @@ class Order(models.Model):
 
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="orders")
     reference = models.CharField(max_length=100, unique=True)
-    items = models.JSONField()  # Requires Django 3.1+ and works with PostgreSQL
+    items = models.JSONField()  # Requires Django 3.1+
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     created_at = models.DateTimeField(auto_now_add=True)
@@ -60,3 +60,23 @@ class ContactMessage(models.Model):
 
     def __str__(self):
         return f"Message from {self.name or 'Anonymous'} <{self.email}>"
+
+
+class Product(models.Model):
+    CATEGORY_CHOICES = [
+        ('bouquet', 'Bouquet'),
+        ('indoor', 'Indoor'),
+        ('outdoor', 'Outdoor'),
+        ('gift', 'Gift'),
+        ('other', 'Other'),
+    ]
+
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    image = models.ImageField(upload_to='product_images/', blank=True, null=True)
+    category = models.CharField(max_length=50, choices=CATEGORY_CHOICES, default='other')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name

@@ -3,7 +3,13 @@ from django.contrib.auth import get_user_model, authenticate
 from django.contrib.auth.password_validation import validate_password
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.utils.translation import gettext_lazy as _
-from .models import ShippingInfo, NewsletterSubscription, ContactMessage, Order
+from .models import (
+    ShippingInfo,
+    NewsletterSubscription,
+    ContactMessage,
+    Order,
+    Product,  # Make sure Product model is imported
+)
 
 User = get_user_model()
 
@@ -185,3 +191,10 @@ class ContactMessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = ContactMessage
         fields = ['name', 'email', 'message']
+
+
+# === SEARCH PRODUCT SERIALIZER ===
+class SearchProductSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Product
+        fields = ['id', 'name', 'price', 'category', 'description', 'image']

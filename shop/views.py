@@ -3,18 +3,20 @@ import logging
 import requests
 
 from django.conf import settings
-from django.contrib.auth import get_user_model
-from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
 from django.http import JsonResponse
+from django.contrib.auth import get_user_model
+from django.contrib.auth.tokens import default_token_generator
 from django.utils.decorators import method_decorator
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
+
 from rest_framework import status, permissions, generics
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
+
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 
@@ -29,9 +31,17 @@ from .serializers import (
     OrderSerializer,
     CustomTokenObtainPairSerializer,
     NewsletterSubscriptionSerializer,
-    ContactMessageSerializer
+    ContactMessageSerializer,
+    SearchProductSerializer,
 )
-from .models import ShippingInfo, Order, NewsletterSubscription, ContactMessage
+
+from .models import (
+    ShippingInfo,
+    Order,
+    NewsletterSubscription,
+    ContactMessage,
+    Product 
+)
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -268,37 +278,52 @@ class OrderView(generics.ListCreateAPIView):
         serializer.save(user=self.request.user)
 
 class NewsletterView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = []  # Allow anyone to subscribe
 
     def post(self, request):
+        logger.debug(f"Incoming newsletter request data: {request.data}")
+
         serializer = NewsletterSubscriptionSerializer(data=request.data)
 
         if serializer.is_valid():
             subscription = serializer.save()
 
-            # Send a confirmation email
             try:
                 send_mail(
                     subject="Thanks for Subscribing to Leye Flower Shop 🌸",
-                    message="Hello!\n\nYou’ve successfully subscribed to our newsletter. We’ll keep you updated with our latest flowers, promos, and updates!\n\n- Leye Flower Shop 🌷",
+                    message=(
+                        "Hello!\n\n"
+                        "You’ve successfully subscribed to our newsletter. "
+                        "We’ll keep you updated with our latest flowers, promos, and updates!\n\n"
+                        "- Leye Flower Shop 🌷"
+                    ),
                     from_email=settings.DEFAULT_FROM_EMAIL,
                     recipient_list=[subscription.email],
-                    fail_silently=True,
+                    fail_silently=False,
                 )
             except Exception as e:
-                print("Email error:", e)
+                logger.error(f"Email sending failed: {e}")
+                return Response(
+                    {'error': 'Subscription saved, but email could not be sent.'},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
 
+            logger.info(f"New newsletter subscription: {subscription.email}")
             return Response({'message': 'Subscribed successfully.'}, status=status.HTTP_201_CREATED)
 
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-      
-@method_decorator(csrf_exempt, name='dispatch')
+        logger.warning(f"Invalid newsletter data: {serializer.errors}")
+        return Response(
+            {'error': serializer.errors.get("email", ["Invalid input"])[0]},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 class ContactView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = []  # Allow anyone to send message
 
     def post(self, request):
+        logger.debug(f"Incoming contact form data: {request.data}")
+
         serializer = ContactMessageSerializer(data=request.data)
+
         if serializer.is_valid():
             contact = serializer.save()
             logger.info(f"New contact message from {contact.name} <{contact.email}>")
@@ -306,16 +331,40 @@ class ContactView(APIView):
             try:
                 send_mail(
                     subject=f"New Contact Message from {contact.name}",
-                    message=f"Email: {contact.email}\n\nMessage:\n{contact.message}",
+                    message=(
+                        f"Name: {contact.name}\n"
+                        f"Email: {contact.email}\n\n"
+                        f"Message:\n{contact.message}"
+                    ),
                     from_email=settings.DEFAULT_FROM_EMAIL,
                     recipient_list=["princeleeoye@gmail.com"],
                     fail_silently=False,
                 )
                 logger.info(f"Notification email sent for contact message from {contact.email}")
             except Exception as e:
-                logger.error("Failed to send contact notification email", exc_info=True)
+                logger.error(f"Email sending failed for contact: {e}")
+                return Response(
+                    {'error': 'Message saved, but failed to send email.'},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
 
-            return Response({"detail": "Message received successfully."}, status=status.HTTP_200_OK)
+            return Response({'message': 'Message received successfully.'}, status=status.HTTP_200_OK)
 
-        logger.warning("Invalid contact form submission", extra={'errors': serializer.errors})
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        logger.warning(f"Invalid contact form data: {serializer.errors}")
+        return Response(
+            {'error': serializer.errors.get("email", ["Invalid input"])[0]},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+class ProductSearchView(APIView):
+    def get(self, request):
+        query = request.GET.get('q', '').strip().lower()
+        if query:
+            products = Product.objects.filter(
+                models.Q(name__icontains=query) | models.Q(category__icontains=query)
+            )
+        else:
+            products = Product.objects.none()
+
+        serializer = SearchProductSerializer(products, many=True)
+        return Response(serializer.data)

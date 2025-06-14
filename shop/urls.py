@@ -1,5 +1,6 @@
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
+
 from .views import (
     SignupView,
     CustomTokenObtainPairView,
@@ -14,6 +15,7 @@ from .views import (
     OrderView,
     NewsletterView,
     ContactView,
+    ProductSearchView,  # ✅ Include this import
 )
 
 urlpatterns = [
@@ -35,4 +37,6 @@ urlpatterns = [
 
     path("newsletter/", NewsletterView.as_view(), name="newsletter"),
     path("contact/", ContactView.as_view(), name="contact"),
+
+    path("products/search/", ProductSearchView.as_view(), name="product_search"),  # ✅ Added route
 ]
