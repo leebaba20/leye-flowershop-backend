@@ -1,14 +1,12 @@
-from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.contrib.auth.models import AbstractUser
 
-
+# Custom User Model
 class CustomUser(AbstractUser):
-    """
-    Extend Django's built-in User model for future custom fields.
-    """
+    # You can add extra fields here if needed
     pass
 
-
+# Shipping Info
 class ShippingInfo(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="shipping_infos")
     full_name = models.CharField(max_length=255)
@@ -16,34 +14,25 @@ class ShippingInfo(models.Model):
     city = models.CharField(max_length=100)
     state = models.CharField(max_length=100)
     postal_code = models.CharField(max_length=20)
-    country = models.CharField(max_length=100, default="Nigeria")
+    country = models.CharField(max_length=100)
     phone_number = models.CharField(max_length=20)
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True)  # 🔧 Add this line
 
     def __str__(self):
-        return f"{self.full_name} - {self.city}, {self.country}"
+        return f"{self.full_name} ({self.user.username})"
 
-
+# Order
 class Order(models.Model):
-    STATUS_CHOICES = [
-        ('pending', 'Pending'),
-        ('processing', 'Processing'),
-        ('completed', 'Completed'),
-        ('cancelled', 'Cancelled'),
-    ]
-
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="orders")
     reference = models.CharField(max_length=100, unique=True)
-    items = models.JSONField()  # Requires Django 3.1+
+    items = models.JSONField()  # Store cart items as JSON
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"Order {self.reference} by {self.user.username}"
 
-
+# Newsletter
 class NewsletterSubscription(models.Model):
     email = models.EmailField(unique=True)
     subscribed_at = models.DateTimeField(auto_now_add=True)
@@ -51,32 +40,23 @@ class NewsletterSubscription(models.Model):
     def __str__(self):
         return self.email
 
-
+# Contact Message
 class ContactMessage(models.Model):
-    name = models.CharField(max_length=100, blank=True)
+    name = models.CharField(max_length=255)
     email = models.EmailField()
     message = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"Message from {self.name or 'Anonymous'} <{self.email}>"
+        return f"Message from {self.name} ({self.email})"
 
-
+# Product (for search functionality)
 class Product(models.Model):
-    CATEGORY_CHOICES = [
-        ('bouquet', 'Bouquet'),
-        ('indoor', 'Indoor'),
-        ('outdoor', 'Outdoor'),
-        ('gift', 'Gift'),
-        ('other', 'Other'),
-    ]
-
     name = models.CharField(max_length=255)
-    description = models.TextField(blank=True)
+    description = models.TextField()
+    category = models.CharField(max_length=100)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     image = models.ImageField(upload_to='product_images/', blank=True, null=True)
-    category = models.CharField(max_length=50, choices=CATEGORY_CHOICES, default='other')
-    created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return self.name

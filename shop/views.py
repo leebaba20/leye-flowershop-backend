@@ -11,12 +11,12 @@ from django.utils.decorators import method_decorator
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
+from django.db import models
 
 from rest_framework import status, permissions, generics
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
-
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 
@@ -40,14 +40,16 @@ from .models import (
     Order,
     NewsletterSubscription,
     ContactMessage,
-    Product 
+    Product,
 )
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
 
+
+# ========== AUTH & USER ==========
 class SignupView(APIView):
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [AllowAny]
 
     def post(self, request):
         serializer = SignupSerializer(data=request.data)
@@ -65,8 +67,10 @@ class SignupView(APIView):
         logger.warning("Signup failed", extra={'errors': serializer.errors})
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
+
 
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
@@ -80,9 +84,10 @@ class LogoutView(APIView):
             token.blacklist()
             logger.info(f"User {request.user.email} logged out")
             return Response({"message": "Logged out successfully"}, status=status.HTTP_205_RESET_CONTENT)
-        except TokenError as e:
+        except TokenError:
             logger.warning("Logout failed: invalid token", exc_info=True)
             return Response({"error": "Invalid or expired token"}, status=status.HTTP_400_BAD_REQUEST)
+
 
 class CurrentUserView(APIView):
     permission_classes = [IsAuthenticated]
@@ -91,13 +96,16 @@ class CurrentUserView(APIView):
         serializer = UserSerializer(request.user)
         return Response(serializer.data)
 
+
 @ensure_csrf_cookie
 def get_csrf_token(request):
     return JsonResponse({'detail': 'CSRF cookie set'})
 
+
+# ========== PASSWORD RESET ==========
 @method_decorator(csrf_exempt, name='dispatch')
 class PasswordResetRequestView(APIView):
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [AllowAny]
 
     def post(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
@@ -123,9 +131,10 @@ class PasswordResetRequestView(APIView):
             logger.warning(f"Password reset requested for non-existent email: {email}")
             return Response({"error": "User with this email does not exist."}, status=status.HTTP_404_NOT_FOUND)
 
+
 @method_decorator(csrf_exempt, name='dispatch')
 class PasswordResetConfirmView(APIView):
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [AllowAny]
 
     def post(self, request):
         serializer = PasswordResetConfirmSerializer(data=request.data)
@@ -151,6 +160,8 @@ class PasswordResetConfirmView(APIView):
             logger.error("Password reset failed", exc_info=True)
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+
+# ========== PAYMENT ==========
 class CreatePaymentView(APIView):
     def post(self, request):
         email = request.data.get('email')
@@ -166,7 +177,7 @@ class CreatePaymentView(APIView):
 
         data = {
             "email": email,
-            "amount": int(amount)# Paystack expects amount in kobo
+            "amount": int(amount)  # Kobo
         }
 
         response = requests.post("https://api.paystack.co/transaction/initialize", json=data, headers=headers)
@@ -180,7 +191,7 @@ class CreatePaymentView(APIView):
 
 @method_decorator(csrf_exempt, name='dispatch')
 class VerifyPaymentView(APIView):
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [AllowAny]
 
     def post(self, request):
         serializer = VerifyPaymentSerializer(data=request.data)
@@ -200,13 +211,12 @@ class VerifyPaymentView(APIView):
                 metadata = res_data["data"].get("metadata", {})
                 shipping = metadata.get("shipping")
                 cart = metadata.get("cart")
-                amount = res_data["data"].get("amount", 0) / 100  # convert back to Naira
+                amount = res_data["data"].get("amount", 0) / 100  # Convert to Naira
 
                 user = request.user if request.user.is_authenticated else None
 
-                # Save shipping info
                 if user and shipping:
-                    shipping_instance, _ = ShippingInfo.objects.update_or_create(
+                    ShippingInfo.objects.update_or_create(
                         user=user,
                         defaults={
                             "full_name": shipping.get("full_name", ""),
@@ -220,7 +230,6 @@ class VerifyPaymentView(APIView):
                     )
                     logger.info(f"Shipping info saved for user {user.email}")
 
-                # Save order
                 if user and cart:
                     Order.objects.update_or_create(
                         reference=reference,
@@ -243,14 +252,14 @@ class VerifyPaymentView(APIView):
             return Response({'error': f'Invalid request: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
 
 
+# ========== SHIPPING ==========
 class ShippingView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         try:
             shipping = ShippingInfo.objects.filter(user=request.user).first()
-            context = {'user': request.user}
-            serializer = ShippingSerializer(instance=shipping, data=request.data, context=context)
+            serializer = ShippingSerializer(instance=shipping, data=request.data, context={'user': request.user})
 
             if serializer.is_valid():
                 serializer.save()
@@ -267,6 +276,8 @@ class ShippingView(APIView):
     def put(self, request):
         return self.post(request)
 
+
+# ========== ORDERS ==========
 class OrderView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = OrderSerializer
@@ -277,85 +288,95 @@ class OrderView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
+
+# ========== NEWSLETTER ==========
 class NewsletterView(APIView):
-    permission_classes = []  # Allow anyone to subscribe
+    permission_classes = [AllowAny]
 
     def post(self, request):
-        logger.debug(f"Incoming newsletter request data: {request.data}")
+        logger.debug("Incoming newsletter request: %s", request.data)
 
         serializer = NewsletterSubscriptionSerializer(data=request.data)
+        if not serializer.is_valid():
+            logger.warning("Invalid newsletter data: %s", serializer.errors)
+            return Response(
+                {"error": serializer.errors.get("email", ["Invalid input"])[0]},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        if serializer.is_valid():
-            subscription = serializer.save()
+        subscription = serializer.save()
+        logger.info("New newsletter subscription: %s", subscription.email)
 
-            try:
-                send_mail(
-                    subject="Thanks for Subscribing to Leye Flower Shop 🌸",
-                    message=(
-                        "Hello!\n\n"
-                        "You’ve successfully subscribed to our newsletter. "
-                        "We’ll keep you updated with our latest flowers, promos, and updates!\n\n"
-                        "- Leye Flower Shop 🌷"
-                    ),
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[subscription.email],
-                    fail_silently=False,
-                )
-            except Exception as e:
-                logger.error(f"Email sending failed: {e}")
-                return Response(
-                    {'error': 'Subscription saved, but email could not be sent.'},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
+        try:
+            send_mail(
+                subject="Thanks for Subscribing to Leye Flower Shop 🌸",
+                message=(
+                    "Hello!\n\n"
+                    "You’ve successfully subscribed to our newsletter. "
+                    "We’ll keep you updated with our latest flowers, promos, and updates!\n\n"
+                    "- Leye Flower Shop 🌷"
+                ),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[subscription.email],
+                fail_silently=False,
+            )
+        except Exception as e:
+            logger.error("Email sending failed: %s", str(e))
+            return Response(
+                {"error": "Subscribed, but failed to send confirmation email."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
-            logger.info(f"New newsletter subscription: {subscription.email}")
-            return Response({'message': 'Subscribed successfully.'}, status=status.HTTP_201_CREATED)
-
-        logger.warning(f"Invalid newsletter data: {serializer.errors}")
         return Response(
-            {'error': serializer.errors.get("email", ["Invalid input"])[0]},
-            status=status.HTTP_400_BAD_REQUEST
+            {"message": "Subscribed successfully."},
+            status=status.HTTP_201_CREATED
         )
+
+
+# ========== CONTACT ==========
 class ContactView(APIView):
-    permission_classes = []  # Allow anyone to send message
+    permission_classes = [AllowAny]
 
     def post(self, request):
-        logger.debug(f"Incoming contact form data: {request.data}")
+        logger.debug("Incoming contact form data: %s", request.data)
 
         serializer = ContactMessageSerializer(data=request.data)
+        if not serializer.is_valid():
+            logger.warning("Invalid contact form data: %s", serializer.errors)
+            return Response(
+                {"error": serializer.errors.get("email", ["Invalid input"])[0]},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        if serializer.is_valid():
-            contact = serializer.save()
-            logger.info(f"New contact message from {contact.name} <{contact.email}>")
+        contact = serializer.save()
+        logger.info("New contact message from %s <%s>", contact.name, contact.email)
 
-            try:
-                send_mail(
-                    subject=f"New Contact Message from {contact.name}",
-                    message=(
-                        f"Name: {contact.name}\n"
-                        f"Email: {contact.email}\n\n"
-                        f"Message:\n{contact.message}"
-                    ),
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=["princeleeoye@gmail.com"],
-                    fail_silently=False,
-                )
-                logger.info(f"Notification email sent for contact message from {contact.email}")
-            except Exception as e:
-                logger.error(f"Email sending failed for contact: {e}")
-                return Response(
-                    {'error': 'Message saved, but failed to send email.'},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
+        try:
+            send_mail(
+                subject=f"New Contact Message from {contact.name}",
+                message=(
+                    f"Name: {contact.name}\n"
+                    f"Email: {contact.email}\n\n"
+                    f"Message:\n{contact.message}"
+                ),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=["princeleeoye@gmail.com"],
+                fail_silently=False,
+            )
+        except Exception as e:
+            logger.error("Email sending failed for contact message: %s", str(e))
+            return Response(
+                {"error": "Message saved, but failed to send notification email."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
-            return Response({'message': 'Message received successfully.'}, status=status.HTTP_200_OK)
-
-        logger.warning(f"Invalid contact form data: {serializer.errors}")
         return Response(
-            {'error': serializer.errors.get("email", ["Invalid input"])[0]},
-            status=status.HTTP_400_BAD_REQUEST
+            {"message": "Message received successfully."},
+            status=status.HTTP_200_OK
         )
 
+
+# ========== PRODUCT SEARCH ==========
 class ProductSearchView(APIView):
     def get(self, request):
         query = request.GET.get('q', '').strip().lower()

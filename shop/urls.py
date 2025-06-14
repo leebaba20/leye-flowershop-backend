@@ -38,5 +38,6 @@ urlpatterns = [
     path("newsletter/", NewsletterView.as_view(), name="newsletter"),
     path("contact/", ContactView.as_view(), name="contact"),
 
-    path("products/search/", ProductSearchView.as_view(), name="product_search"),  # ✅ Added route
+    path('search/', ProductSearchView.as_view(), name='product-search'),
+
 ]
