@@ -379,8 +379,9 @@ class ContactView(APIView):
             status=status.HTTP_200_OK
         )
 
-# ========== PRODUCT SEARCH ==========
 class ProductSearchView(APIView):
+    permission_classes = [AllowAny]
+
     def get(self, request):
         query = request.GET.get('q', '').strip().lower()
         if query:
