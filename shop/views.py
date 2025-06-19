@@ -379,17 +379,25 @@ class ContactView(APIView):
             status=status.HTTP_200_OK
         )
 
+from rest_framework.permissions import AllowAny
+
 class ProductSearchView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        query = request.GET.get('q', '').strip().lower()
-        if query:
-            products = Product.objects.filter(
-                models.Q(name__icontains=query) | models.Q(category__icontains=query)
-            )
-        else:
-            products = Product.objects.none()
+        try:
+            query = request.GET.get('q', '').strip().lower()
+            logger.debug(f"Search query: {query}")
 
-        serializer = SearchProductSerializer(products, many=True, context={"request": request})
-        return Response(serializer.data)
+            if query:
+                products = Product.objects.filter(
+                    models.Q(name__icontains=query) | models.Q(category__icontains=query)
+                )
+            else:
+                products = Product.objects.none()
+
+            serializer = SearchProductSerializer(products, many=True, context={"request": request})
+            return Response(serializer.data)
+        except Exception as e:
+            logger.error("Search failed", exc_info=True)
+            return Response({"error": "Search failed", "details": str(e)}, status=500)
