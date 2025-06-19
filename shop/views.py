@@ -11,7 +11,8 @@ from django.utils.decorators import method_decorator
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
-from django.db import models
+from django.db.models import Q
+
 
 from rest_framework import status, permissions, generics
 from rest_framework.views import APIView
@@ -387,5 +388,5 @@ class ProductSearchView(APIView):
         else:
             products = Product.objects.none()
 
-        serializer = SearchProductSerializer(products, many=True)
+        serializer = SearchProductSerializer(products, many=True, context={"request": request})
         return Response(serializer.data)
