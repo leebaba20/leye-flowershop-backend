@@ -13,7 +13,6 @@ from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.db.models import Q
 
-
 from rest_framework import status, permissions, generics
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -189,7 +188,6 @@ class CreatePaymentView(APIView):
 
         return Response(res_data.get("data", {}), status=status.HTTP_200_OK)
 
-
 @method_decorator(csrf_exempt, name='dispatch')
 class VerifyPaymentView(APIView):
     permission_classes = [AllowAny]
@@ -212,7 +210,10 @@ class VerifyPaymentView(APIView):
                 metadata = res_data["data"].get("metadata", {})
                 shipping = metadata.get("shipping")
                 cart = metadata.get("cart")
-                amount = res_data["data"].get("amount", 0) / 100  # Convert to Naira
+                
+                # 🧮 Convert Kobo to Naira with 2 decimal precision
+                amount_kobo = res_data["data"].get("amount", 0)
+                amount_naira = round(amount_kobo / 100, 2)
 
                 user = request.user if request.user.is_authenticated else None
 
@@ -237,7 +238,7 @@ class VerifyPaymentView(APIView):
                         defaults={
                             "user": user,
                             "items": cart,
-                            "total_amount": amount,
+                            "total_amount": amount_naira,
                         }
                     )
                     logger.info(f"Order saved for user {user.email}, ref: {reference}")
@@ -291,6 +292,7 @@ class OrderView(generics.ListCreateAPIView):
 
 
 # ========== NEWSLETTER ==========
+@method_decorator(csrf_exempt, name='dispatch')
 class NewsletterView(APIView):
     permission_classes = [AllowAny]
 
@@ -306,7 +308,7 @@ class NewsletterView(APIView):
             )
 
         subscription = serializer.save()
-        logger.info("New newsletter subscription: %s", subscription.email)
+        logger.info("✅ New newsletter subscription: %s", subscription.email)
 
         try:
             send_mail(
@@ -322,10 +324,11 @@ class NewsletterView(APIView):
                 fail_silently=False,
             )
         except Exception as e:
-            logger.error("Email sending failed: %s", str(e))
+            logger.error("❌ Newsletter confirmation email failed: %s", str(e))
+            # Still return success to frontend but notify of issue
             return Response(
-                {"error": "Subscribed, but failed to send confirmation email."},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"message": "Subscribed, but confirmation email failed to send."},
+                status=status.HTTP_201_CREATED
             )
 
         return Response(
@@ -333,8 +336,8 @@ class NewsletterView(APIView):
             status=status.HTTP_201_CREATED
         )
 
-
 # ========== CONTACT ==========
+@method_decorator(csrf_exempt, name='dispatch')
 class ContactView(APIView):
     permission_classes = [AllowAny]
 
@@ -350,7 +353,7 @@ class ContactView(APIView):
             )
 
         contact = serializer.save()
-        logger.info("New contact message from %s <%s>", contact.name, contact.email)
+        logger.info("✅ New contact message from %s <%s>", contact.name, contact.email)
 
         try:
             send_mail(
@@ -365,17 +368,16 @@ class ContactView(APIView):
                 fail_silently=False,
             )
         except Exception as e:
-            logger.error("Email sending failed for contact message: %s", str(e))
+            logger.error("❌ Email sending failed for contact message: %s", str(e))
             return Response(
-                {"error": "Message saved, but failed to send notification email."},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"message": "Message saved, but failed to send notification email."},
+                status=status.HTTP_200_OK
             )
 
         return Response(
             {"message": "Message received successfully."},
             status=status.HTTP_200_OK
         )
-
 
 # ========== PRODUCT SEARCH ==========
 class ProductSearchView(APIView):
