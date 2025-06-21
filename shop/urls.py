@@ -15,7 +15,6 @@ from .views import (
     OrderView,
     NewsletterView,
     ContactView,
-    ProductSearchView,  # ✅ Include this import
 )
 
 urlpatterns = [
@@ -37,7 +36,5 @@ urlpatterns = [
 
     path("newsletter/", NewsletterView.as_view(), name="newsletter"),
     path("contact/", ContactView.as_view(), name="contact"),
-
-    path('search/', ProductSearchView.as_view(), name='product-search'),
 
 ]

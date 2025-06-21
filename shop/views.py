@@ -32,7 +32,6 @@ from .serializers import (
     CustomTokenObtainPairSerializer,
     NewsletterSubscriptionSerializer,
     ContactMessageSerializer,
-    SearchProductSerializer,
 )
 
 from .models import (
@@ -40,7 +39,6 @@ from .models import (
     Order,
     NewsletterSubscription,
     ContactMessage,
-    Product,
 )
 
 logger = logging.getLogger(__name__)
@@ -308,9 +306,11 @@ class NewsletterView(APIView):
             )
 
         subscription = serializer.save()
-        logger.info("✅ New newsletter subscription: %s", subscription.email)
+        user_email = subscription.email
+        logger.info("✅ New newsletter subscription: %s", user_email)
 
         try:
+            # Send confirmation to subscriber
             send_mail(
                 subject="Thanks for Subscribing to Leye Flower Shop 🌸",
                 message=(
@@ -320,14 +320,23 @@ class NewsletterView(APIView):
                     "- Leye Flower Shop 🌷"
                 ),
                 from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[subscription.email],
+                recipient_list=[user_email],
                 fail_silently=False,
             )
+
+            # Notify host
+            send_mail(
+                subject="🌟 New Newsletter Subscriber",
+                message=f"New subscriber: {user_email}",
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=["princeleeoye@gmail.com"],
+                fail_silently=False,
+            )
+
         except Exception as e:
-            logger.error("❌ Newsletter confirmation email failed: %s", str(e))
-            # Still return success to frontend but notify of issue
+            logger.error("❌ Newsletter email error: %s", str(e))
             return Response(
-                {"message": "Subscribed, but confirmation email failed to send."},
+                {"message": "Subscribed, but email notification failed."},
                 status=status.HTTP_201_CREATED
             )
 
@@ -356,6 +365,7 @@ class ContactView(APIView):
         logger.info("✅ New contact message from %s <%s>", contact.name, contact.email)
 
         try:
+            # Notify host
             send_mail(
                 subject=f"New Contact Message from {contact.name}",
                 message=(
@@ -367,10 +377,24 @@ class ContactView(APIView):
                 recipient_list=["princeleeoye@gmail.com"],
                 fail_silently=False,
             )
+
+            # Send confirmation to user
+            send_mail(
+                subject="Thanks for Contacting Leye Flower Shop 💐",
+                message=(
+                    f"Dear {contact.name},\n\n"
+                    "Thank you for reaching out! We’ve received your message and will get back to you as soon as possible.\n\n"
+                    "- Leye Flower Shop 🌷"
+                ),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[contact.email],
+                fail_silently=False,
+            )
+
         except Exception as e:
-            logger.error("❌ Email sending failed for contact message: %s", str(e))
+            logger.error("❌ Contact email error: %s", str(e))
             return Response(
-                {"message": "Message saved, but failed to send notification email."},
+                {"message": "Message saved, but email sending failed."},
                 status=status.HTTP_200_OK
             )
 
@@ -379,25 +403,3 @@ class ContactView(APIView):
             status=status.HTTP_200_OK
         )
 
-from rest_framework.permissions import AllowAny
-
-class ProductSearchView(APIView):
-    permission_classes = [AllowAny]
-
-    def get(self, request):
-        try:
-            query = request.GET.get('q', '').strip().lower()
-            logger.debug(f"Search query: {query}")
-
-            if query:
-                products = Product.objects.filter(
-                    models.Q(name__icontains=query) | models.Q(category__icontains=query)
-                )
-            else:
-                products = Product.objects.none()
-
-            serializer = SearchProductSerializer(products, many=True, context={"request": request})
-            return Response(serializer.data)
-        except Exception as e:
-            logger.error("Search failed", exc_info=True)
-            return Response({"error": "Search failed", "details": str(e)}, status=500)

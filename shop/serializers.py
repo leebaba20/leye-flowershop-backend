@@ -8,7 +8,6 @@ from .models import (
     NewsletterSubscription,
     ContactMessage,
     Order,
-    Product,  # Make sure Product model is imported
 )
 
 User = get_user_model()
@@ -193,18 +192,3 @@ class ContactMessageSerializer(serializers.ModelSerializer):
         fields = ['name', 'email', 'message']
 
 
-# === SEARCH PRODUCT SERIALIZER ===
-class SearchProductSerializer(serializers.ModelSerializer):
-    img = serializers.SerializerMethodField()
-    new_price = serializers.DecimalField(source='price', max_digits=10, decimal_places=2)
-    old_price = serializers.SerializerMethodField()  # Optional
-
-    class Meta:
-        model = Product
-        fields = ['id', 'name', 'img', 'new_price', 'old_price', 'description']
-
-    def get_img(self, obj):
-        request = self.context.get('request')
-        if obj.image and hasattr(obj.image, 'url'):
-            return request.build_absolute_uri(obj.image.url)
-        return None
