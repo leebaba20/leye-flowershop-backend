@@ -1,3 +1,45 @@
-env/
-.env.production
+# Environment and secrets
 .env
+.env.production
+env/
+venv/
+__pycache__/
+
+# Python cache and compiled files
+*.pyc
+*.pyo
+*.pyd
+*.pyc
+*.pyo
+*.pyd
+*.pdb
+*.egg-info/
+dist/
+build/
+
+# IDE/editor files
+.vscode/
+.idea/
+*.swp
+
+# Django and DB artifacts
+db.sqlite3
+*.log
+
+# Static/media files (if generated)
+staticfiles/
+media/
+static/
+
+# Coverage and test output
+htmlcov/
+.coverage
+.tox/
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+
+# macOS and Windows system files
+.DS_Store
+Thumbs.db
