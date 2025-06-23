@@ -1,23 +1,32 @@
-import logging
 import os
+import logging
 from pathlib import Path
 from datetime import timedelta
-from decouple import Config, RepositoryEnv, Csv
-
-# Select environment
-env_file = '.env.production' if os.getenv('DJANGO_ENV') == 'production' else '.env'
-config = Config(RepositoryEnv(env_file))
+from decouple import config as decouple_config, Csv
 
 # Base directory
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Smart config loader: use os.environ on Render, fallback to .env locally
+if os.environ.get("RENDER"):
+    def config(key, default=None, cast=None):
+        val = os.environ.get(key, default)
+        if cast:
+            if cast == bool:
+                return val.lower() == 'true'
+            if cast == int:
+                return int(val)
+            if cast == Csv:
+                return val.split(",")
+        return val
+else:
+    from decouple import Config, RepositoryEnv
+    config = Config(RepositoryEnv(BASE_DIR / ".env"))
+
 # Security
 SECRET_KEY = config('DJANGO_SECRET_KEY', default='fallback-secret-key')
 DEBUG = config('DEBUG', default=True, cast=bool)
-
-ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1").split(",")
-
-
+ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1", cast=Csv)
 
 # Application definition
 INSTALLED_APPS = [
@@ -66,7 +75,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'leye_shop.wsgi.application'
 
-# Database
+# Database (SQLite for dev)
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -138,14 +147,13 @@ SIMPLE_JWT = {
 # Paystack key
 PAYSTACK_SECRET_KEY = config('PAYSTACK_SECRET_KEY')
 
-
+# Email config
 DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL")
 EMAIL_HOST = config("EMAIL_HOST")
 EMAIL_PORT = config("EMAIL_PORT", cast=int)
 EMAIL_USE_TLS = config("EMAIL_USE_TLS", cast=bool)
 EMAIL_HOST_USER = config("EMAIL_HOST_USER")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD")
-
 
 # Frontend base URL
 FRONTEND_BASE_URL = config('FRONTEND_BASE_URL', default='http://localhost:3000')
@@ -168,7 +176,7 @@ LOGGING = {
     },
     'root': {
         'handlers': ['console'],
-        'level': 'ERROR',  # Logs uncaught exceptions
+        'level': 'ERROR',
     },
     'loggers': {
         'django': {
@@ -178,7 +186,7 @@ LOGGING = {
         },
         'shop': {
             'handlers': ['console'],
-            'level': 'DEBUG',  # Keep this for your app-specific logs
+            'level': 'DEBUG',
             'propagate': False,
         },
     },
