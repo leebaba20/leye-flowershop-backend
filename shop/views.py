@@ -163,10 +163,15 @@ class PasswordResetConfirmView(APIView):
 class CreatePaymentView(APIView):
     def post(self, request):
         email = request.data.get('email')
-        amount = request.data.get('amount')
+        amount = request.data.get('amount')  # Typo fixed from 'amo unt'
 
         if not email or not amount:
             return Response({'error': 'Email and amount are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            amount_kobo = int(float(amount) * 100)  # Convert ₦ to Kobo safely
+        except ValueError:
+            return Response({'error': 'Invalid amount format'}, status=status.HTTP_400_BAD_REQUEST)
 
         headers = {
             "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}",
@@ -175,7 +180,7 @@ class CreatePaymentView(APIView):
 
         data = {
             "email": email,
-            "amount": int(amount)  # Kobo
+            "amount": amount_kobo  # Always send in Kobo
         }
 
         response = requests.post("https://api.paystack.co/transaction/initialize", json=data, headers=headers)
@@ -185,6 +190,7 @@ class CreatePaymentView(APIView):
             return Response({'detail': res_data.get('message', 'Payment initialization failed')}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(res_data.get("data", {}), status=status.HTTP_200_OK)
+
 
 @method_decorator(csrf_exempt, name='dispatch')
 class VerifyPaymentView(APIView):
@@ -208,8 +214,7 @@ class VerifyPaymentView(APIView):
                 metadata = res_data["data"].get("metadata", {})
                 shipping = metadata.get("shipping")
                 cart = metadata.get("cart")
-                
-                # 🧮 Convert Kobo to Naira with 2 decimal precision
+
                 amount_kobo = res_data["data"].get("amount", 0)
                 amount_naira = round(amount_kobo / 100, 2)
 
