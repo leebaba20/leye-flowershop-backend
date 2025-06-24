@@ -46,6 +46,7 @@ User = get_user_model()
 
 
 # ========== AUTH & USER ==========
+
 class SignupView(APIView):
     permission_classes = [AllowAny]
 
@@ -53,6 +54,8 @@ class SignupView(APIView):
         serializer = SignupSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
+            user.is_active = True  # Ensure user is active
+            user.save()
             logger.info(f"New user created: {user.email}")
             return Response({
                 "message": "User created successfully",
@@ -101,6 +104,7 @@ def get_csrf_token(request):
 
 
 # ========== PASSWORD RESET ==========
+
 @method_decorator(csrf_exempt, name='dispatch')
 class PasswordResetRequestView(APIView):
     permission_classes = [AllowAny]

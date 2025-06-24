@@ -12,7 +12,6 @@ from .models import (
 
 User = get_user_model()
 
-
 # === USER SERIALIZER ===
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -35,6 +34,9 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
         if not user:
             raise serializers.ValidationError(_("Invalid username or password."))
+
+        if not user.is_active:
+            raise serializers.ValidationError(_("This account is inactive."))
 
         refresh = self.get_token(user)
 
@@ -84,11 +86,12 @@ class SignupSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
-        return User.objects.create_user(
+        user = User.objects.create_user(
             username=validated_data['username'],
             email=validated_data['email'],
-            password=validated_data['password']
+            password=validated_data['password']  # fixed: this line was misplaced
         )
+        return user
 
 
 # === PASSWORD RESET REQUEST SERIALIZER ===
