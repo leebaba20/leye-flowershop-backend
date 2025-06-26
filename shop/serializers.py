@@ -3,6 +3,8 @@ from django.contrib.auth import get_user_model, authenticate
 from django.contrib.auth.password_validation import validate_password
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.utils.translation import gettext_lazy as _
+from django.db.models import Q
+
 from .models import (
     ShippingInfo,
     NewsletterSubscription,
@@ -11,6 +13,7 @@ from .models import (
 )
 
 User = get_user_model()
+
 
 # === USER SERIALIZER ===
 class UserSerializer(serializers.ModelSerializer):
@@ -21,22 +24,20 @@ class UserSerializer(serializers.ModelSerializer):
 
 # === LOGIN SERIALIZER ===
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
-    username_field = 'username'  # still needed for compatibility
-
-    def validate(self, attrs):
+    def validate(self, attrs: dict) -> dict:
         username = attrs.get('username')
         password = attrs.get('password')
 
         if not username or not password:
-            raise serializers.ValidationError(_("Must include both username and password."))
+            raise serializers.ValidationError({"detail": _("Must include both username and password.")})
 
-        # Allow login via username or email
         user = User.objects.filter(Q(username__iexact=username) | Q(email__iexact=username)).first()
+
         if not user or not user.check_password(password):
-            raise serializers.ValidationError(_("Invalid username/email or password."))
+            raise serializers.ValidationError({"detail": _("Invalid username/email or password.")})
 
         if not user.is_active:
-            raise serializers.ValidationError(_("This account is inactive."))
+            raise serializers.ValidationError({"detail": _("This account is inactive.")})
 
         refresh = self.get_token(user)
 
@@ -70,35 +71,34 @@ class SignupSerializer(serializers.ModelSerializer):
         model = User
         fields = ('username', 'email', 'password')
 
-    def validate_username(self, value):
+    def validate_username(self, value: str) -> str:
         if User.objects.filter(username=value).exists():
             raise serializers.ValidationError("Username already taken.")
         return value
 
-    def validate_email(self, value):
+    def validate_email(self, value: str) -> str:
         value = value.lower()
         if User.objects.filter(email__iexact=value).exists():
             raise serializers.ValidationError("Email already registered.")
         return value
 
-    def validate_password(self, value):
+    def validate_password(self, value: str) -> str:
         validate_password(value)
         return value
 
-    def create(self, validated_data):
-        user = User.objects.create_user(
+    def create(self, validated_data: dict) -> User:
+        return User.objects.create_user(
             username=validated_data['username'],
             email=validated_data['email'],
-            password=validated_data['password']  # fixed: this line was misplaced
+            password=validated_data['password']
         )
-        return user
 
 
 # === PASSWORD RESET REQUEST SERIALIZER ===
 class PasswordResetRequestSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
-    def validate_email(self, value):
+    def validate_email(self, value: str) -> str:
         if not User.objects.filter(email__iexact=value).exists():
             raise serializers.ValidationError("No user found with this email address.")
         return value
@@ -118,7 +118,7 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         }
     )
 
-    def validate_new_password(self, value):
+    def validate_new_password(self, value: str) -> str:
         validate_password(value)
         return value
 
@@ -129,7 +129,7 @@ class CreatePaymentSerializer(serializers.Serializer):
     amount = serializers.IntegerField()
     metadata = serializers.DictField(required=False)
 
-    def validate_amount(self, value):
+    def validate_amount(self, value: int) -> int:
         if value < 100:
             raise serializers.ValidationError("Minimum transaction amount is ₦100.")
         return value
@@ -154,10 +154,10 @@ class ShippingSerializer(serializers.ModelSerializer):
             'phone_number',
         ]
 
-    def create(self, validated_data):
+    def create(self, validated_data: dict) -> ShippingInfo:
         return ShippingInfo.objects.create(user=self.context['user'], **validated_data)
 
-    def update(self, instance, validated_data):
+    def update(self, instance: ShippingInfo, validated_data: dict) -> ShippingInfo:
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
@@ -170,7 +170,7 @@ class OrderSerializer(serializers.ModelSerializer):
         model = Order
         fields = ['reference', 'items', 'total_amount']
 
-    def validate_total_amount(self, value):
+    def validate_total_amount(self, value: int) -> int:
         if value <= 0:
             raise serializers.ValidationError("Total amount must be positive.")
         return value
@@ -182,7 +182,7 @@ class NewsletterSubscriptionSerializer(serializers.ModelSerializer):
         model = NewsletterSubscription
         fields = ['email']
 
-    def validate_email(self, value):
+    def validate_email(self, value: str) -> str:
         if NewsletterSubscription.objects.filter(email__iexact=value).exists():
             raise serializers.ValidationError("You are already subscribed with this email.")
         return value
@@ -193,5 +193,3 @@ class ContactMessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = ContactMessage
         fields = ['name', 'email', 'message']
-
-
