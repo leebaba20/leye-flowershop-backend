@@ -4,7 +4,6 @@ from pathlib import Path
 from datetime import timedelta
 from decouple import config as decouple_config, Csv
 
-# Base directory
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Smart config loader: use os.environ on Render, fallback to .env locally
@@ -23,12 +22,20 @@ else:
     from decouple import Config, RepositoryEnv
     config = Config(RepositoryEnv(BASE_DIR / ".env"))
 
-# Security
+# SECURITY
 SECRET_KEY = config('DJANGO_SECRET_KEY', default='fallback-secret-key')
 DEBUG = config('DEBUG', default=True, cast=bool)
-ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1", cast=Csv)
 
-# Application definition
+
+# Ensure ALLOWED_HOSTS is always a list
+raw_hosts = config("ALLOWED_HOSTS", default="localhost,127.0.0.1")
+if isinstance(raw_hosts, str):
+    ALLOWED_HOSTS = [host.strip() for host in raw_hosts.split(",")]
+else:
+    ALLOWED_HOSTS = raw_hosts
+
+
+# APPLICATION
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -75,7 +82,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'leye_shop.wsgi.application'
 
-# Database (SQLite for dev)
+# DATABASE
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -83,10 +90,9 @@ DATABASES = {
     }
 }
 
-# Custom user model
 AUTH_USER_MODEL = 'shop.CustomUser'
 
-# Password validation
+# PASSWORD VALIDATION
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
@@ -94,17 +100,16 @@ AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
-# Internationalization
+# TIMEZONE
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
-# Static files
+# STATIC FILES
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CORS
@@ -113,19 +118,18 @@ CORS_ALLOWED_ORIGINS = [
     "https://leyeflowershop.netlify.app",
 ]
 
-# CSRF trusted origins
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
     "https://leyeflowershop.netlify.app",
     "https://leye-flowershop-backend.onrender.com",
 ]
 
-# HTTPS security
+# HTTPS settings
 SECURE_SSL_REDIRECT = True
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 
-# DRF & JWT
+# DRF + JWT
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -144,10 +148,10 @@ SIMPLE_JWT = {
     'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
 }
 
-# Paystack key
+# PAYSTACK
 PAYSTACK_SECRET_KEY = config('PAYSTACK_SECRET_KEY')
 
-# Email config
+# EMAIL
 DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL")
 EMAIL_HOST = config("EMAIL_HOST")
 EMAIL_PORT = config("EMAIL_PORT", cast=int)
@@ -155,10 +159,10 @@ EMAIL_USE_TLS = config("EMAIL_USE_TLS", cast=bool)
 EMAIL_HOST_USER = config("EMAIL_HOST_USER")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD")
 
-# Frontend base URL
+# FRONTEND
 FRONTEND_BASE_URL = config('FRONTEND_BASE_URL', default='http://localhost:3000')
 
-# Logging
+# LOGGING
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,

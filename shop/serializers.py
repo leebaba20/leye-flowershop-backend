@@ -21,7 +21,7 @@ class UserSerializer(serializers.ModelSerializer):
 
 # === LOGIN SERIALIZER ===
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
-    username_field = 'username'
+    username_field = 'username'  # still needed for compatibility
 
     def validate(self, attrs):
         username = attrs.get('username')
@@ -30,10 +30,10 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         if not username or not password:
             raise serializers.ValidationError(_("Must include both username and password."))
 
-        user = authenticate(request=self.context.get('request'), username=username, password=password)
-
-        if not user:
-            raise serializers.ValidationError(_("Invalid username or password."))
+        # Allow login via username or email
+        user = User.objects.filter(Q(username__iexact=username) | Q(email__iexact=username)).first()
+        if not user or not user.check_password(password):
+            raise serializers.ValidationError(_("Invalid username/email or password."))
 
         if not user.is_active:
             raise serializers.ValidationError(_("This account is inactive."))

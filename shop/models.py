@@ -1,12 +1,20 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 
-# Custom User Model
+# ===============================
+# ✅ Custom User Model
+# ===============================
 class CustomUser(AbstractUser):
-    # You can add extra fields here if needed
-    pass
+    email_confirmed = models.BooleanField(default=False)
+    phone_number = models.CharField(max_length=20, blank=True, null=True)
 
-# Shipping Info
+    def __str__(self):
+        return self.username
+
+
+# ===============================
+# 🚚 Shipping Info Model
+# ===============================
 class ShippingInfo(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="shipping_infos")
     full_name = models.CharField(max_length=255)
@@ -16,12 +24,20 @@ class ShippingInfo(models.Model):
     postal_code = models.CharField(max_length=20)
     country = models.CharField(max_length=100)
     phone_number = models.CharField(max_length=20)
-    created_at = models.DateTimeField(auto_now_add=True)  # 🔧 Add this line
+    created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.full_name} ({self.user.username})"
+        return f"{self.full_name} ({getattr(self.user, 'username', 'Unknown')})"
 
-# Order
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "Shipping Info"
+        verbose_name_plural = "Shipping Infos"
+
+
+# ===============================
+# 🧾 Order Model
+# ===============================
 class Order(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="orders")
     reference = models.CharField(max_length=100, unique=True)
@@ -30,9 +46,17 @@ class Order(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"Order {self.reference} by {self.user.username}"
+        return f"Order {self.reference} by {getattr(self.user, 'username', 'Unknown')}"
 
-# Newsletter
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "Order"
+        verbose_name_plural = "Orders"
+
+
+# ===============================
+# 📬 Newsletter Subscription
+# ===============================
 class NewsletterSubscription(models.Model):
     email = models.EmailField(unique=True)
     subscribed_at = models.DateTimeField(auto_now_add=True)
@@ -40,7 +64,15 @@ class NewsletterSubscription(models.Model):
     def __str__(self):
         return self.email
 
-# Contact Message
+    class Meta:
+        ordering = ['-subscribed_at']
+        verbose_name = "Newsletter Subscriber"
+        verbose_name_plural = "Newsletter Subscribers"
+
+
+# ===============================
+# 📩 Contact Message Model
+# ===============================
 class ContactMessage(models.Model):
     name = models.CharField(max_length=255)
     email = models.EmailField()
@@ -50,3 +82,7 @@ class ContactMessage(models.Model):
     def __str__(self):
         return f"Message from {self.name} ({self.email})"
 
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "Contact Message"
+        verbose_name_plural = "Contact Messages"
