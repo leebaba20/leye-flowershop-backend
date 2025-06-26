@@ -1,4 +1,3 @@
-import os
 import logging
 import requests
 
@@ -7,11 +6,10 @@ from django.core.mail import send_mail
 from django.http import JsonResponse
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
-from django.utils.decorators import method_decorator
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
-from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
-from django.db.models import Q
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.utils.decorators import method_decorator
 
 from rest_framework import status, permissions, generics
 from rest_framework.views import APIView
@@ -33,20 +31,13 @@ from .serializers import (
     NewsletterSubscriptionSerializer,
     ContactMessageSerializer,
 )
-
-from .models import (
-    ShippingInfo,
-    Order,
-    NewsletterSubscription,
-    ContactMessage,
-)
+from .models import ShippingInfo, Order, NewsletterSubscription, ContactMessage
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
-# ========== AUTH & USER ==========
-
+# === AUTH & USER ===
 class SignupView(APIView):
     permission_classes = [AllowAny]
 
@@ -54,7 +45,7 @@ class SignupView(APIView):
         serializer = SignupSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
-            user.is_active = True  # Ensure user is active
+            user.is_active = True
             user.save()
             logger.info(f"New user created: {user.email}")
             return Response({
@@ -79,7 +70,7 @@ class LogoutView(APIView):
     def post(self, request):
         refresh_token = request.data.get("refresh")
         if not refresh_token:
-            return Response({"error": "Refresh token is required"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Refresh token is required"}, status=status.HTTP_400_BAD_REQUEST)
         try:
             token = RefreshToken(refresh_token)
             token.blacklist()
@@ -87,7 +78,7 @@ class LogoutView(APIView):
             return Response({"message": "Logged out successfully"}, status=status.HTTP_205_RESET_CONTENT)
         except TokenError:
             logger.warning("Logout failed: invalid token", exc_info=True)
-            return Response({"error": "Invalid or expired token"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Invalid or expired token"}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class CurrentUserView(APIView):
@@ -103,9 +94,7 @@ def get_csrf_token(request):
     return JsonResponse({'detail': 'CSRF cookie set'})
 
 
-# ========== PASSWORD RESET ==========
-
-@method_decorator(csrf_exempt, name='dispatch')
+# === PASSWORD RESET ===
 class PasswordResetRequestView(APIView):
     permission_classes = [AllowAny]
 
@@ -131,10 +120,9 @@ class PasswordResetRequestView(APIView):
             return Response({"message": "Password reset link sent."}, status=status.HTTP_200_OK)
         except User.DoesNotExist:
             logger.warning(f"Password reset requested for non-existent email: {email}")
-            return Response({"error": "User with this email does not exist."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"detail": "User with this email does not exist."}, status=status.HTTP_404_NOT_FOUND)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class PasswordResetConfirmView(APIView):
     permission_classes = [AllowAny]
 
@@ -152,42 +140,43 @@ class PasswordResetConfirmView(APIView):
             user = User.objects.get(pk=uid)
 
             if not default_token_generator.check_token(user, token):
-                return Response({"error": "Invalid or expired token."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"detail": "Invalid or expired token."}, status=status.HTTP_400_BAD_REQUEST)
 
             user.set_password(new_password)
             user.save()
             logger.info(f"Password reset successfully for user {user.email}")
-            return Response({"message": "Password has been reset."}, status=status.HTTP_200_OK)
+            return Response({"message": "Password has been reset successfully."}, status=status.HTTP_200_OK)
+
+        except User.DoesNotExist:
+            return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+
         except Exception as e:
-            logger.error("Password reset failed", exc_info=True)
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            logger.error("Unexpected error during password reset", exc_info=True)
+            return Response({"detail": "Something went wrong. Please try again later."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-# ========== PAYMENT ==========
+# === PAYMENT ===
 class CreatePaymentView(APIView):
     def post(self, request):
-        email = request.data.get('email')
-        amount = request.data.get('amount')  # Typo fixed from 'amo unt'
+        serializer = CreatePaymentSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        if not email or not amount:
-            return Response({'error': 'Email and amount are required'}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            amount_kobo = int(float(amount) * 100)  # Convert ₦ to Kobo safely
-        except ValueError:
-            return Response({'error': 'Invalid amount format'}, status=status.HTTP_400_BAD_REQUEST)
+        data = serializer.validated_data
+        amount_kobo = int(float(data["amount"]) * 100)
 
         headers = {
             "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}",
             "Content-Type": "application/json",
         }
 
-        data = {
-            "email": email,
-            "amount": amount_kobo  # Always send in Kobo
+        pay_data = {
+            "email": data["email"],
+            "amount": amount_kobo,
+            "metadata": data.get("metadata", {}),
         }
 
-        response = requests.post("https://api.paystack.co/transaction/initialize", json=data, headers=headers)
+        response = requests.post("https://api.paystack.co/transaction/initialize", json=pay_data, headers=headers)
         res_data = response.json()
 
         if response.status_code != 200 or not res_data.get("status"):
@@ -196,7 +185,6 @@ class CreatePaymentView(APIView):
         return Response(res_data.get("data", {}), status=status.HTTP_200_OK)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class VerifyPaymentView(APIView):
     permission_classes = [AllowAny]
 
@@ -227,15 +215,7 @@ class VerifyPaymentView(APIView):
                 if user and shipping:
                     ShippingInfo.objects.update_or_create(
                         user=user,
-                        defaults={
-                            "full_name": shipping.get("full_name", ""),
-                            "address": shipping.get("address", ""),
-                            "city": shipping.get("city", ""),
-                            "state": shipping.get("state", ""),
-                            "postal_code": shipping.get("postal_code", ""),
-                            "country": shipping.get("country", ""),
-                            "phone_number": shipping.get("phone_number", ""),
-                        }
+                        defaults={**shipping}
                     )
                     logger.info(f"Shipping info saved for user {user.email}")
 
@@ -261,32 +241,27 @@ class VerifyPaymentView(APIView):
             return Response({'error': f'Invalid request: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
 
 
-# ========== SHIPPING ==========
+# === SHIPPING ===
 class ShippingView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        try:
-            shipping = ShippingInfo.objects.filter(user=request.user).first()
-            serializer = ShippingSerializer(instance=shipping, data=request.data, context={'user': request.user})
+        shipping = ShippingInfo.objects.filter(user=request.user).first()
+        serializer = ShippingSerializer(instance=shipping, data=request.data, context={'user': request.user})
 
-            if serializer.is_valid():
-                serializer.save()
-                logger.info(f"Shipping info {'updated' if shipping else 'created'} for user {request.user.email}")
-                return Response({"message": "Shipping info saved", "data": serializer.data}, status=status.HTTP_200_OK)
+        if serializer.is_valid():
+            serializer.save()
+            logger.info(f"Shipping info {'updated' if shipping else 'created'} for user {request.user.email}")
+            return Response({"message": "Shipping info saved", "data": serializer.data}, status=status.HTTP_200_OK)
 
-            logger.warning("Shipping info failed to save", extra={'errors': serializer.errors})
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        except Exception as e:
-            logger.error("Error in saving shipping info", exc_info=True)
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        logger.warning("Shipping info failed to save", extra={'errors': serializer.errors})
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def put(self, request):
         return self.post(request)
 
 
-# ========== ORDERS ==========
+# === ORDERS ===
 class OrderView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = OrderSerializer
@@ -298,117 +273,57 @@ class OrderView(generics.ListCreateAPIView):
         serializer.save(user=self.request.user)
 
 
-# ========== NEWSLETTER ==========
-@method_decorator(csrf_exempt, name='dispatch')
+# === NEWSLETTER ===
 class NewsletterView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        logger.debug("Incoming newsletter request: %s", request.data)
-
         serializer = NewsletterSubscriptionSerializer(data=request.data)
         if not serializer.is_valid():
-            logger.warning("Invalid newsletter data: %s", serializer.errors)
             return Response(
-                {"error": serializer.errors.get("email", ["Invalid input"])[0]},
+                {"detail": serializer.errors.get("email", ["Invalid input"])[0]},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         subscription = serializer.save()
-        user_email = subscription.email
-        logger.info("✅ New newsletter subscription: %s", user_email)
+        email = subscription.email
 
         try:
-            # Send confirmation to subscriber
             send_mail(
                 subject="Thanks for Subscribing to Leye Flower Shop 🌸",
-                message=(
-                    "Hello!\n\n"
-                    "You’ve successfully subscribed to our newsletter. "
-                    "We’ll keep you updated with our latest flowers, promos, and updates!\n\n"
-                    "- Leye Flower Shop 🌷"
-                ),
+                message="You've successfully subscribed to our newsletter!",
                 from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[user_email],
-                fail_silently=False,
+                recipient_list=[email],
             )
-
-            # Notify host
-            send_mail(
-                subject="🌟 New Newsletter Subscriber",
-                message=f"New subscriber: {user_email}",
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=["princeleeoye@gmail.com"],
-                fail_silently=False,
-            )
-
+            logger.info("Newsletter subscription saved and email sent to %s", email)
         except Exception as e:
-            logger.error("❌ Newsletter email error: %s", str(e))
-            return Response(
-                {"message": "Subscribed, but email notification failed."},
-                status=status.HTTP_201_CREATED
-            )
+            logger.error("Failed to send subscription email", exc_info=True)
 
-        return Response(
-            {"message": "Subscribed successfully."},
-            status=status.HTTP_201_CREATED
-        )
+        return Response({"message": "Subscribed successfully."}, status=status.HTTP_201_CREATED)
 
-# ========== CONTACT ==========
-@method_decorator(csrf_exempt, name='dispatch')
+
+# === CONTACT ===
 class ContactView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        logger.debug("Incoming contact form data: %s", request.data)
-
         serializer = ContactMessageSerializer(data=request.data)
         if not serializer.is_valid():
-            logger.warning("Invalid contact form data: %s", serializer.errors)
             return Response(
-                {"error": serializer.errors.get("email", ["Invalid input"])[0]},
+                {"detail": serializer.errors.get("email", ["Invalid input"])[0]},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         contact = serializer.save()
-        logger.info("✅ New contact message from %s <%s>", contact.name, contact.email)
 
         try:
-            # Notify host
             send_mail(
                 subject=f"New Contact Message from {contact.name}",
-                message=(
-                    f"Name: {contact.name}\n"
-                    f"Email: {contact.email}\n\n"
-                    f"Message:\n{contact.message}"
-                ),
+                message=f"{contact.name} <{contact.email}> wrote:\n\n{contact.message}",
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=["princeleeoye@gmail.com"],
-                fail_silently=False,
             )
-
-            # Send confirmation to user
-            send_mail(
-                subject="Thanks for Contacting Leye Flower Shop 💐",
-                message=(
-                    f"Dear {contact.name},\n\n"
-                    "Thank you for reaching out! We’ve received your message and will get back to you as soon as possible.\n\n"
-                    "- Leye Flower Shop 🌷"
-                ),
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[contact.email],
-                fail_silently=False,
-            )
-
         except Exception as e:
-            logger.error("❌ Contact email error: %s", str(e))
-            return Response(
-                {"message": "Message saved, but email sending failed."},
-                status=status.HTTP_200_OK
-            )
+            logger.error("Failed to send contact email", exc_info=True)
 
-        return Response(
-            {"message": "Message received successfully."},
-            status=status.HTTP_200_OK
-        )
-
+        return Response({"message": "Message received successfully."}, status=status.HTTP_200_OK)
