@@ -25,8 +25,9 @@ urlpatterns = [
     path("me/", CurrentUserView.as_view(), name="current_user"),
     path("token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
 
-    path("password-reset/request/", PasswordResetRequestView.as_view(), name="password_reset_request"),
-    path("password-reset/confirm/", PasswordResetConfirmView.as_view(), name="password_reset_confirm"),
+    # ✅ Fix these to match frontend
+    path("reset-password/", PasswordResetRequestView.as_view(), name="password_reset_request"),
+    path("reset-password-confirm/", PasswordResetConfirmView.as_view(), name="password_reset_confirm"),
 
     path("paystack/init/", CreatePaymentView.as_view(), name="create_payment"),
     path("payment/verify/", VerifyPaymentView.as_view(), name="verify_payment"),
@@ -36,5 +37,4 @@ urlpatterns = [
 
     path("newsletter/", NewsletterView.as_view(), name="newsletter"),
     path("contact/", ContactView.as_view(), name="contact"),
-
 ]
